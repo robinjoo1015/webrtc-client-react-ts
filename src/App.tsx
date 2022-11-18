@@ -23,8 +23,9 @@ const pc_config = {
     
   ],
 };
-const SOCKET_SERVER_URL = "http://localhost:8080";
+// const SOCKET_SERVER_URL = "http://localhost:8080";
 // const SOCKET_SERVER_URL = "http://192.168.1.120:8080";
+const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
 const socketRef = io(SOCKET_SERVER_URL, {
   withCredentials: true,
   transports: ['websocket', 'polling']
