@@ -1,8 +1,10 @@
 // import { Socket } from "dgram";
+import { Server } from "http";
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import {io} from "socket.io-client";
+import {io, Socket} from "socket.io-client";
 import Video from "./Components/Video";
 import { WebRTCUser } from "./types";
+import {v4 as uuidv4} from "uuid";
 
 const pc_config = {
   iceServers: [
@@ -24,12 +26,48 @@ const pc_config = {
   ],
 };
 // const SOCKET_SERVER_URL = "http://localhost:8080";
-// const SOCKET_SERVER_URL = "http://192.168.1.120:8080";
+// const SOCKET_SERVER_URL = "http://192.168.0.4:8080";
 const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
-const socketRef = io(SOCKET_SERVER_URL, {
-  withCredentials: true,
-  transports: ['websocket', 'polling']
-});
+// const socketRef = io(SOCKET_SERVER_URL, {
+//   // withCredentials: true,
+//   transports: ['websocket', 'polling']
+// });
+interface ServerToClientEvents {
+  userEnter: ( data: {id: string} ) => void;
+  allUsers: ( data: {users: Array<{ id: string }>} ) => void;
+  userExit: ( data: {id: string} ) => void;
+  getSenderAnswer: ( data: {sdp: RTCSessionDescription} ) => void;
+  getSenderCandidate: ( data: {candidate: RTCIceCandidateInit} ) => void;
+  getReceiverAnswer: ( data: {id: string, sdp: RTCSessionDescription} ) => void;
+  getReceiverCandidate: ( data: {id: string, candidate: RTCIceCandidateInit} ) => void;
+}
+interface ClientToServerEvents {
+  receiverOffer: ( data: {
+    sdp: RTCSessionDescriptionInit,
+    receiverSocketID: string,
+    senderSocketID: string,
+    roomID: string,
+  }) => void;
+  receiverCandidate: ( data: {
+    candidate: RTCPeerConnectionIceEvent['candidate'],
+    receiverSocketID: string,
+    senderSocketID: string,
+  }) => void;
+  senderOffer: ( data: {
+    sdp: RTCSessionDescriptionInit,
+    senderSocketID: string,
+    roomID: string,
+  }) => void;
+  senderCandidate: ( data: {
+    candidate: RTCPeerConnectionIceEvent['candidate'],
+    senderSocketID: string,
+  }) => void;
+  joinRoom: ( data: {
+    id: string,
+    roomID: string,
+  }) => void;
+}
+// let socketRef: Socket<ServerToClientEvents, ClientToServerEvents> = null;
 
 const App = () => {
   // const socketRef = useRef();
@@ -42,6 +80,8 @@ const App = () => {
   const [users, setUsers] = useState<Array<WebRTCUser>>([]);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const socketRef = useRef<Socket>();
+  const uuid = useRef<string>(uuidv4());
 
   // closeReceivePC
   const closeReceivePC = useCallback((id: string) => {
@@ -67,14 +107,16 @@ const App = () => {
 
         await pc.setLocalDescription(new RTCSessionDescription(sdp));
 
-        if (!socketRef) return;
-        socketRef.emit("receiverOffer", {
+        if (!socketRef.current) return;
+        socketRef.current.emit("receiverOffer", {
           sdp: sdp,
-          receiverSocketID: socketRef.id,
+          // receiverSocketID: socketRef.current.id,
+          receiverSocketID: uuid.current,
           senderSocketID: senderSocketID,
           roomID: "1234", //
         });
-        console.log("emitted receiverOffer", senderSocketID, socketRef.id);
+        // console.log("emitted receiverOffer", senderSocketID, socketRef.current.id);
+        console.log("emitted receiverOffer", senderSocketID, uuid.current);
       } catch (error) {
         console.log(error);
       }
@@ -93,15 +135,17 @@ const App = () => {
       // console.log(receivePCsRef);
 
       pc.onicecandidate = (e) => {
-        if (!(e.candidate && socketRef)) return;
+        if (!(e.candidate && socketRef.current)) return;
         console.log("receiver PC onicecandidate");
 
-        socketRef.emit("receiverCandidate", {
+        socketRef.current.emit("receiverCandidate", {
           candidate: e.candidate,
-          receiverSocketID: socketRef.id,
+          // receiverSocketID: socketRef.current.id,
+          receiverSocketID: uuid.current,
           senderSocketID: socketID,
         });
-        console.log("emitted receiverCandidate", socketID, socketRef.id)
+        // console.log("emitted receiverCandidate", socketID, socketRef.current.id)
+        console.log("emitted receiverCandidate", socketID, uuid.current)
       };
 
       pc.oniceconnectionstatechange = (e) => {
@@ -163,13 +207,15 @@ const App = () => {
       );
       await console.log("createSenderOffer setLocalDescription");
 
-      if (!socketRef) return;
-      await socketRef.emit("senderOffer", {
+      if (!socketRef.current) return;
+      await socketRef.current.emit("senderOffer", {
         sdp: sdp,
-        senderSocketID: socketRef.id,
+        // senderSocketID: socketRef.current.id,
+        senderSocketID: uuid.current,
         roomID: "1234", // uuid
       });
-      console.log("emitted senderOffer", socketRef.id);
+      // console.log("emitted senderOffer", socketRef.current.id);
+      console.log("emitted senderOffer", uuid.current);
     } catch (error) {
       console.log(error);
     }
@@ -182,14 +228,17 @@ const App = () => {
     console.log('createSenderPeerConnection');
 
     pc.onicecandidate = (e) => {
-      if (!(e.candidate && socketRef)) return;
-      console.log("sender PC onicecandidate", socketRef.id, e);
+      if (!(e.candidate && socketRef.current)) return;
+      // console.log("sender PC onicecandidate", socketRef.current.id, e);
+      console.log("sender PC onicecandidate", uuid.current, e);
 
-      socketRef.emit("senderCandidate", {
+      socketRef.current.emit("senderCandidate", {
         candidate: e.candidate,
-        senderSocketID: socketRef.id,
+        // senderSocketID: socketRef.current.id,
+        senderSocketID: uuid.current,
       });
-      console.log("emitted senderCandidate", socketRef.id)
+      // console.log("emitted senderCandidate", socketRef.current.id)
+      console.log("emitted senderCandidate", uuid.current)
     };
 
     pc.oniceconnectionstatechange = (e) => {
@@ -228,16 +277,18 @@ const App = () => {
       localStreamRef.current = stream;
 
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      if (!socketRef) return;
+      if (!socketRef.current) return;
 
       await createSenderPeerConnection();
       await createSenderOffer();
 
-      await socketRef.emit("joinRoom", {
-        id: socketRef.id,
+      await socketRef.current.emit("joinRoom", {
+        // id: socketRef.current.id,
+        id: uuid.current,
         roomID: "1234", // 
       });
-      console.log("emitted joinRoom", socketRef.id);
+      // console.log("emitted joinRoom", socketRef.current.id);
+      console.log("emitted joinRoom", uuid.current);
     } catch (e) {
       console.log(`getUserMedia error: ${e}`);
     }
@@ -248,18 +299,33 @@ const App = () => {
     // socketRef.current = io(SOCKET_SERVER_URL);
     // socketRef = io(SOCKET_SERVER_URL);
     // setSocketRef(io(SOCKET_SERVER_URL));
+    async function ioConnect() {
+      socketRef.current = await io(SOCKET_SERVER_URL, {
+        // withCredentials: true,
+        transports: ['websocket', 'polling']
+      });
+      if (!socketRef.current) return;
+      // console.log("ioConnect", socketRef.current.id)
+      console.log("ioConnect", socketRef.current.id)
+    }
+    ioConnect()
+    // socketRef.current = io(SOCKET_SERVER_URL, {
+    //   // withCredentials: true,
+    //   transports: ['websocket', 'polling']
+    // });
 
     getLocalStream();
 
+    if (!socketRef.current) return;
     // userEnter
-    socketRef.on("userEnter", (data: { id: string }) => {
+    socketRef.current.on("userEnter", (data: { id: string }) => {
       console.log('on userEnter', data.id);
 
       createReceivePC(data.id);
     });
 
     // allUsers
-    socketRef.on(
+    socketRef.current.on(
       "allUsers",
       (data: { users: Array<{ id: string }> }) => {
         console.log('on allUsers', data.users);
@@ -268,14 +334,14 @@ const App = () => {
     );
 
     // userExit
-    socketRef.on("userExit", (data: { id: string }) => {
+    socketRef.current.on("userExit", (data: { id: string }) => {
       console.log('on userExit', data.id)
       closeReceivePC(data.id);
       setUsers((users) => users.filter((user) => user.id !== data.id));
     });
 
     // getSenderAnswer
-    socketRef.on(
+    socketRef.current.on(
       "getSenderAnswer",
       async (data: { sdp: RTCSessionDescription }) => {
         console.log('on getSenderAnswer');
@@ -293,7 +359,7 @@ const App = () => {
     );
 
     // getSenderCandidate
-    socketRef.on(
+    socketRef.current.on(
       "getSenderCandidate",
       async (data: { candidate: RTCIceCandidateInit }) => {
         console.log('on getSenderCandidate');
@@ -312,7 +378,7 @@ const App = () => {
     );
 
     // getReceiverAnswer
-    socketRef.on(
+    socketRef.current.on(
       "getReceiverAnswer",
       async (data: { id: string; sdp: RTCSessionDescription }) => {
         console.log('on getReceiverAnswer', data.id);
@@ -330,7 +396,7 @@ const App = () => {
     );
 
     // getReceiverCandidate
-    socketRef.on(
+    socketRef.current.on(
       "getReceiverCandidate",
       async (data: { id: string; candidate: RTCIceCandidateInit }) => {
         console.log('on getReceiverCandidate', data.id);
@@ -349,8 +415,8 @@ const App = () => {
     );
 
     return () => {
-      if (socketRef) {
-        socketRef.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
       }
       if (sendPCRef.current) {
         sendPCRef.current.close();
