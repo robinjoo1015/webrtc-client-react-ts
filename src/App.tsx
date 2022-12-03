@@ -20,9 +20,38 @@ const pc_config = {
         "stun:stun2.l.google.com:19302",
         "stun:stun3.l.google.com:19302",
         "stun:stun4.l.google.com:19302",
-    ]
+        "stun:openrelay.metered.ca:80",
+      ]
     },
-    
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    { urls: 'turn:numb.viagenie.ca', credential: 'muazkh', username: 'webrtc@live.com' },
+    { urls: 'turn:relay.backups.cz', credential: 'webrtc', username: 'webrtc' },
+    { urls: 'turn:relay.backups.cz?transport=tcp', credential: 'webrtc', username: 'webrtc' },
+    { urls: 'turn:192.158.29.39:3478?transport=udp', credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=', username: '28224511:1379330808' },
+    {
+      urls: 'turn:turn.bistri.com:80',
+      credential: 'homeo',
+      username: 'homeo'
+    },
+    {
+      urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
+      credential: 'webrtc',
+      username: 'webrtc'
+    }
   ],
 };
 // const SOCKET_SERVER_URL = "http://localhost:8080";
@@ -34,6 +63,7 @@ const socketRef = io(SOCKET_SERVER_URL, {
 });
 // const socketuuid = uuidv4()
 
+/*
 // interface ServerToClientEvents {
 //   userEnter: ( data: {id: string} ) => void;
 //   allUsers: ( data: {users: Array<{ id: string }>} ) => void;
@@ -43,7 +73,8 @@ const socketRef = io(SOCKET_SERVER_URL, {
 //   getReceiverAnswer: ( data: {id: string, sdp: RTCSessionDescription} ) => void;
 //   getReceiverCandidate: ( data: {id: string, candidate: RTCIceCandidateInit} ) => void;
 // }
-
+*/
+/*
 // interface ClientToServerEvents {
 //   receiverOffer: ( data: {
 //     sdp: RTCSessionDescriptionInit,
@@ -70,6 +101,7 @@ const socketRef = io(SOCKET_SERVER_URL, {
 //     roomID: string,
 //   }) => void;
 // }
+*/
 // let socketRef: Socket<ServerToClientEvents, ClientToServerEvents> = null;
 
 const App = () => {
@@ -87,13 +119,13 @@ const App = () => {
   // const uuid = useRef<string>(uuidv4());
 
   // closeReceivePC
-  const closeReceivePC = useCallback((id: string) => {
+  const closeReceivePC = useCallback(async (id: string) => {
     console.log('closeReceivePC', id)
 
     if (!receivePCsRef.current[id]) return;
-    receivePCsRef.current[id].close();
+    await receivePCsRef.current[id].close();
     console.log('closeReceivePC closed', id);
-    delete receivePCsRef.current[id];
+    await delete receivePCsRef.current[id];
   }, []);
 
   // createReceiverOffer
@@ -108,10 +140,10 @@ const App = () => {
         });
         console.log("create receiver offer success");
 
-        await pc.setLocalDescription(new RTCSessionDescription(sdp));
+        await pc.setLocalDescription(await new RTCSessionDescription(sdp));
 
         if (!socketRef) return;
-        socketRef.emit("receiverOffer", {
+        await socketRef.emit("receiverOffer", {
           sdp: sdp,
           receiverSocketID: socketRef.id,
           // receiverSocketID: socketuuid,
@@ -128,20 +160,20 @@ const App = () => {
   );
 
   // createReceiverPeerConnection
-  const createReceiverPeerConnection = useCallback((socketID: string) => {
+  const createReceiverPeerConnection = useCallback(async (socketID: string) => {
     console.log('createReceiverPeerConnection', socketID);
 
     try {
-      const pc = new RTCPeerConnection(pc_config);
+      const pc = await new RTCPeerConnection(pc_config);
       // add pc to peerConnections object
-      receivePCsRef.current = { ...receivePCsRef.current, [socketID]: pc };
+      // receivePCsRef.current = await { ...receivePCsRef.current, [socketID]: pc };
       // console.log(receivePCsRef);
 
-      pc.onicecandidate = (e) => {
+      pc.onicecandidate = async (e) => {
         console.log("receiver PC onicecandidate");
         if (!(e.candidate && socketRef)) return;
         // console.log("receiver PC onicecandidate");
-        socketRef.emit("receiverCandidate", {
+        await socketRef.emit("receiverCandidate", {
           candidate: e.candidate,
           receiverSocketID: socketRef.id,
           // receiverSocketID: socketuuid,
@@ -152,13 +184,14 @@ const App = () => {
       };
 
       pc.oniceconnectionstatechange = (e) => {
-        console.log("ReceiverPeerConnection IceConnectionStateChange");
+        // console.log(e)
+        console.log("ReceiverPeerConnection IceConnectionStateChange", pc.iceConnectionState);
       };
 
-      pc.ontrack = (e) => {
+      pc.ontrack = async (e) => {
         console.log("ontrack success");
 
-        setUsers((oldUsers) =>
+        await setUsers((oldUsers) =>
           oldUsers
             .filter((user) => user.id !== socketID)
             .concat({
@@ -167,6 +200,8 @@ const App = () => {
             })
         );
       };
+
+      receivePCsRef.current = await { ...receivePCsRef.current, [socketID]: pc };
 
       return pc;
     } catch (e) {
@@ -177,15 +212,15 @@ const App = () => {
 
   // createReceivePC
   const createReceivePC = useCallback(
-    (id: string) => {
+    async (id: string) => {
       console.log('createReceivePC', id);
 
       try {
         console.log(`socketID(${id}) user entered`);
-        const pc = createReceiverPeerConnection(id);
+        const pc = await createReceiverPeerConnection(id);
         // console.log(pc);
         if (!(socketRef && pc)) return;
-        createReceiverOffer(pc, id);
+        await createReceiverOffer(pc, id);
       } catch (error) {
         console.log(error);
       }
@@ -198,7 +233,14 @@ const App = () => {
     console.log("createSenderOffer");
 
     try {
-      if (!sendPCRef.current) return;
+      const timer = (ms: number) => new Promise(res => setTimeout(res, ms))
+      let seconds = new Date().getTime() / 1000
+      while (!sendPCRef.current && ((new Date().getTime() / 1000)-seconds<10)) {
+        await timer(1)
+      }
+      
+      if(!sendPCRef.current) return;
+
       const sdp = await sendPCRef.current.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
@@ -206,7 +248,7 @@ const App = () => {
       // console.log("create sender offer success");
 
       await sendPCRef.current.setLocalDescription(
-        new RTCSessionDescription(sdp)
+        await new RTCSessionDescription(sdp)
       );
       await console.log("createSenderOffer setLocalDescription");
 
@@ -225,18 +267,18 @@ const App = () => {
   }, []);
 
   // createSenderPeerConnection
-  const createSenderPeerConnection = useCallback(() => {
-    const pc = new RTCPeerConnection(pc_config);
+  const createSenderPeerConnection = useCallback(async() => {
+    const pc = await new RTCPeerConnection(pc_config);
 
     console.log('createSenderPeerConnection');
 
-    pc.onicecandidate = (e) => {
+    pc.onicecandidate = async (e) => {
       // console.log("sender PC onicecandidate", uuid.current, e);
       if (!(e.candidate && socketRef)) return;
       console.log("sender PC onicecandidate", socketRef.id, e);
       // console.log("sender PC onicecandidate", socketuuid, e);
 
-      socketRef.emit("senderCandidate", {
+      await socketRef.emit("senderCandidate", {
         candidate: e.candidate,
         senderSocketID: socketRef.id,
         // senderSocketID: socketuuid,
@@ -246,30 +288,33 @@ const App = () => {
     };
 
     pc.oniceconnectionstatechange = (e) => {
-      console.log("SenderPeerConnection IceConnectionStateChange");
+      // console.log(e)
+      console.log("SenderPeerConnection IceConnectionStateChange", pc.iceConnectionState);
     };
 
     if (localStreamRef.current) {
       console.log("add local stream");
 
-      localStreamRef.current.getTracks().forEach((track) => {
+      await localStreamRef.current.getTracks().forEach(async (track) => {
         if (!localStreamRef.current) return;
         console.log("pc addTrack");
-        pc.addTrack(track, localStreamRef.current);
+        await pc.addTrack(track, localStreamRef.current);
       });
     } else {
       console.log("no local stream");
     }
 
-    sendPCRef.current = pc;
+    sendPCRef.current = await pc;
+    return;
   }, []);
 
   // getLocalStream
   const getLocalStream = useCallback(async () => {
     console.log('getLocalStream');
     
+    // wait for socket connection!!!
     const timer = (ms: number) => new Promise(res => setTimeout(res, ms))
-    while (socketRef.id == undefined){
+    while (socketRef.id === undefined){
       await timer(1)
     }
     console.log(socketRef.id)
@@ -289,7 +334,7 @@ const App = () => {
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       if (!socketRef) return;
 
-      await createSenderPeerConnection();
+      createSenderPeerConnection();
       await createSenderOffer();
 
       await socketRef.emit("joinRoom", {
@@ -306,43 +351,30 @@ const App = () => {
 
   // useEffect
   useEffect(() => {
-    // socketRef.current = io(SOCKET_SERVER_URL);
-    // socketRef = io(SOCKET_SERVER_URL);
-    // async function ioConnect() {
-    //   socketRef.current = await io(SOCKET_SERVER_URL, {
-    //     withCredentials: true,
-    //     transports: ['websocket', 'polling']
-    //   });
-    //   if (!socketRef.current) return;
-    //   // console.log("ioConnect", socketRef.current.id)
-    //   console.log("ioConnect", socketRef.current.id)
-    //   await getLocalStream()
-    // }
-    // ioConnect()
     getLocalStream();
 
     if (!socketRef) return;
     // userEnter
-    socketRef.on("userEnter", (data: { id: string }) => {
+    socketRef.on("userEnter", async (data: { id: string }) => {
       console.log('on userEnter', data.id);
 
-      createReceivePC(data.id);
+      await createReceivePC(data.id);
     });
 
     // allUsers
     socketRef.on(
       "allUsers",
-      (data: { users: Array<{ id: string }> }) => {
+      async (data: { users: Array<{ id: string }> }) => {
         console.log('on allUsers', data.users);
-        data.users.forEach((user) => createReceivePC(user.id));
+        await data.users.forEach(async (user) => await createReceivePC(user.id));
       }
     );
 
     // userExit
-    socketRef.on("userExit", (data: { id: string }) => {
+    socketRef.on("userExit", async (data: { id: string }) => {
       console.log('on userExit', data.id)
-      closeReceivePC(data.id);
-      setUsers((users) => users.filter((user) => user.id !== data.id));
+      await closeReceivePC(data.id);
+      await setUsers((users) => users.filter((user) => user.id !== data.id));
     });
 
     // getSenderAnswer
@@ -352,9 +384,14 @@ const App = () => {
         console.log('on getSenderAnswer');
 
         try {
+          const timer = (ms: number) => new Promise(res => setTimeout(res, ms))
+          let seconds = new Date().getTime() / 1000
+          while (!sendPCRef.current && ((new Date().getTime() / 1000)-seconds<10)) {
+            await timer(1)
+          }
           if (!sendPCRef.current) return;
           await sendPCRef.current.setRemoteDescription(
-            new RTCSessionDescription(data.sdp)
+            await new RTCSessionDescription(data.sdp)
           );
           console.log("getSenderAnswer setRemoteDesciption");
         } catch (error) {
@@ -373,7 +410,7 @@ const App = () => {
           if (!(data.candidate && sendPCRef.current)) return;
           console.log("get sender candidate");
           await sendPCRef.current.addIceCandidate(
-            new RTCIceCandidate(data.candidate)
+            await new RTCIceCandidate(data.candidate)
           );
           console.log("candidate add success");
         } catch (error) {
@@ -390,7 +427,7 @@ const App = () => {
 
         try {
           console.log(`get socketID(${data.id})'s answer`);
-          const pc: RTCPeerConnection = receivePCsRef.current[data.id];
+          const pc: RTCPeerConnection = await receivePCsRef.current[data.id];
           if (!pc) return;
           await pc.setRemoteDescription(data.sdp);
           console.log(`socketID(${data.id})'s set remote sdp success`);
@@ -409,9 +446,9 @@ const App = () => {
         try {
           console.log(data);
           console.log(`get socketID(${data.id})'s candidate`);
-          const pc: RTCPeerConnection = receivePCsRef.current[data.id];
+          const pc: RTCPeerConnection = await receivePCsRef.current[data.id];
           if (!(pc && data.candidate)) return;
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          await pc.addIceCandidate(await new RTCIceCandidate(data.candidate));
           console.log(`socketID(${data.id})'s candidate add success`);
         } catch (error) {
           console.log(error);
