@@ -13,28 +13,28 @@ const pc_config = {
     //   'credentials': '[YOR CREDENTIALS]',
     //   'username': '[USERNAME]'
     // },
-    // {
-    //   urls: [
-    //     "stun:stun.l.google.com:19302",
-    //     "stun:stun1.l.google.com:19302",
-    //     "stun:stun2.l.google.com:19302",
-    //     "stun:stun3.l.google.com:19302",
-    //     "stun:stun4.l.google.com:19302",
-    // ]
-    // },
     {
-      "username":"u-SD8l77k-U-ItC6MMVo1aoAOHVCcmZOIHbHrfiRLkOsw1GF_J-uILRGV7TAGUYpAAAAAGOQon1yb2JpbmpvbzEwMTU=",
-      "urls":[
-        "stun:ntk-turn-1.xirsys.com",
-        "turn:ntk-turn-1.xirsys.com:80?transport=udp",
-        "turn:ntk-turn-1.xirsys.com:3478?transport=udp",
-        "turn:ntk-turn-1.xirsys.com:80?transport=tcp",
-        "turn:ntk-turn-1.xirsys.com:3478?transport=tcp",
-        "turns:ntk-turn-1.xirsys.com:443?transport=tcp",
-        "turns:ntk-turn-1.xirsys.com:5349?transport=tcp"
-      ],
-      "credential":"15c61834-763b-11ed-8083-0242ac120004"
-    }
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+        "stun:stun3.l.google.com:19302",
+        "stun:stun4.l.google.com:19302",
+    ]
+    },
+    // {
+    //   "username":"u-SD8l77k-U-ItC6MMVo1aoAOHVCcmZOIHbHrfiRLkOsw1GF_J-uILRGV7TAGUYpAAAAAGOQon1yb2JpbmpvbzEwMTU=",
+    //   "urls":[
+    //     "stun:ntk-turn-1.xirsys.com",
+    //     "turn:ntk-turn-1.xirsys.com:80?transport=udp",
+    //     "turn:ntk-turn-1.xirsys.com:3478?transport=udp",
+    //     "turn:ntk-turn-1.xirsys.com:80?transport=tcp",
+    //     "turn:ntk-turn-1.xirsys.com:3478?transport=tcp",
+    //     "turns:ntk-turn-1.xirsys.com:443?transport=tcp",
+    //     "turns:ntk-turn-1.xirsys.com:5349?transport=tcp"
+    //   ],
+    //   "credential":"15c61834-763b-11ed-8083-0242ac120004"
+    // }
     
   ],
 };
@@ -59,12 +59,12 @@ const pc_config = {
 
 // const SOCKET_SERVER_URL = "http://localhost:8080";
 // const SOCKET_SERVER_URL = "http://52.79.240.198";
-const SOCKET_SERVER_URL = "http://ec2-52-79-240-198.ap-northeast-2.compute.amazonaws.com:8080"
-// const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
+// const SOCKET_SERVER_URL = "http://ec2-52-79-240-198.ap-northeast-2.compute.amazonaws.com:8080"
+const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
 // const SOCKET_SERVER_URL = "https://port-0-webrtc-sfu-server-js-11er1a24lb9hvht5.gksl2.cloudtype.app/"
 const socketRef = io(SOCKET_SERVER_URL, {
   withCredentials: true,
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'] //######
 });
 // const socketuuid = uuidv4()
 
@@ -187,7 +187,7 @@ const App = () => {
       };
 
       pc.oniceconnectionstatechange = (e) => {
-        console.log("ReceiverPeerConnection IceConnectionStateChange");
+        console.log("ReceiverPeerConnection IceConnectionStateChange", pc.iceConnectionState);
       };
 
       pc.ontrack = (e) => {
@@ -242,7 +242,7 @@ const App = () => {
       const sdp = await sendPCRef.current.createOffer({
         offerToReceiveAudio: false,
         offerToReceiveVideo: false,
-      });
+      })
       // console.log("create sender offer success");
 
       await sendPCRef.current.setLocalDescription(
@@ -302,7 +302,7 @@ const App = () => {
     };
 
     pc.oniceconnectionstatechange = (e) => {
-      console.log("SenderPeerConnection IceConnectionStateChange");
+      console.log("SenderPeerConnection IceConnectionStateChange", pc.iceConnectionState);
     };
     
 
@@ -352,19 +352,6 @@ const App = () => {
 
   // useEffect
   useEffect(() => {
-    // socketRef.current = io(SOCKET_SERVER_URL);
-    // socketRef = io(SOCKET_SERVER_URL);
-    // async function ioConnect() {
-    //   socketRef.current = await io(SOCKET_SERVER_URL, {
-    //     withCredentials: true,
-    //     transports: ['websocket', 'polling']
-    //   });
-    //   if (!socketRef.current) return;
-    //   // console.log("ioConnect", socketRef.current.id)
-    //   console.log("ioConnect", socketRef.current.id)
-    //   await getLocalStream()
-    // }
-    // ioConnect()
     getLocalStream();
 
     if (!socketRef) return;
@@ -399,6 +386,12 @@ const App = () => {
 
         try {
           if (!sendPCRef.current) return;
+          
+          const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
+          if (sendPCRef.current.iceGatheringState!=="complete") {
+            await timer(1);
+          }
+
           await sendPCRef.current.setRemoteDescription(
             new RTCSessionDescription(data.sdp)
           );
@@ -465,7 +458,7 @@ const App = () => {
           while(receivePCsRef.current[data.id].remoteDescription === null) {
             await timer(1)
           }
-          await pc.addIceCandidate(await new RTCIceCandidate(data.candidate));
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
           console.log(`socketID(${data.id})'s candidate add success`);
         } catch (error) {
           console.log(error);
@@ -495,10 +488,8 @@ const App = () => {
     <div>
       <video
         style={{
-          // width: 240,
-          // height: 240,
-          width: 360,
-          height: 360,
+          width: 240,
+          height: 240,
           margin: 5,
           backgroundColor: "black",
         }}
