@@ -58,10 +58,9 @@ const pc_config = {
 */
 
 // const SOCKET_SERVER_URL = "http://localhost:8080";
-// const SOCKET_SERVER_URL = "http://52.79.240.198";
 // const SOCKET_SERVER_URL = "http://ec2-52-79-240-198.ap-northeast-2.compute.amazonaws.com:8080"
-const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
-// const SOCKET_SERVER_URL = "https://port-0-webrtc-sfu-server-js-11er1a24lb9hvht5.gksl2.cloudtype.app/"
+// const SOCKET_SERVER_URL = "https://webrtc-sfu-server-js.herokuapp.com/"
+const SOCKET_SERVER_URL = "https://port-0-webrtc-sfu-server-js-11er1a24lb9hvht5.gksl2.cloudtype.app/"
 const socketRef = io(SOCKET_SERVER_URL, {
   withCredentials: true,
   transports: ['websocket', 'polling'] //######
@@ -140,10 +139,9 @@ const App = () => {
           offerToReceiveAudio: true,
           offerToReceiveVideo: true,
         });
-        
 
-        await pc.setLocalDescription(new RTCSessionDescription(sdp));
-        console.log("create receiver offer success, set local description", pc.localDescription);
+        pc.setLocalDescription(new RTCSessionDescription(sdp));
+        console.log("create receiver offer success, set local description", sdp);
 
         if (!socketRef) return;
         socketRef.emit("receiverOffer", {
@@ -169,11 +167,11 @@ const App = () => {
     try {
       const pc = new RTCPeerConnection(pc_config);
       // add pc to peerConnections object
-      receivePCsRef.current = { ...receivePCsRef.current, [socketID]: pc };
+      // receivePCsRef.current = { ...receivePCsRef.current, [socketID]: pc };
       // console.log(receivePCsRef);
 
       pc.onicecandidate = (e) => {
-        console.log("receiver PC onicecandidate");
+        console.log("receiver PC onicecandidate", e.candidate);
         if (!(e.candidate && socketRef)) return;
         // console.log("receiver PC onicecandidate");
         socketRef.emit("receiverCandidate", {
@@ -190,6 +188,10 @@ const App = () => {
         console.log("ReceiverPeerConnection IceConnectionStateChange", pc.iceConnectionState);
       };
 
+      pc.onicecandidateerror = (e) => {
+        console.log(e)
+      }
+
       pc.ontrack = (e) => {
         console.log("ontrack success");
 
@@ -202,6 +204,8 @@ const App = () => {
             })
         );
       };
+
+      receivePCsRef.current = { ...receivePCsRef.current, [socketID]: pc };
 
       return pc;
     } catch (e) {
@@ -245,10 +249,10 @@ const App = () => {
       })
       // console.log("create sender offer success");
 
-      await sendPCRef.current.setLocalDescription(
+      sendPCRef.current.setLocalDescription(
         new RTCSessionDescription(sdp)
       );
-      console.log("createSenderOffer setLocalDescription", sendPCRef.current.localDescription);
+      console.log("createSenderOffer setLocalDescription", sendPCRef.current.localDescription, sdp);
 
       if (!socketRef) return;
       await socketRef.emit("senderOffer", {
@@ -284,13 +288,13 @@ const App = () => {
 
     pc.onicecandidate = async(e) => {
       if (!(e.candidate && socketRef)) return;
-      console.log("sender PC onicecandidate", socketRef.id, e);
+      console.log("sender PC onicecandidate", socketRef.id, e.candidate);
       // console.log("sender PC onicecandidate", socketuuid, e);
 
-      const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
-      while (pc.remoteDescription === null) {
-        await timer(1);
-      }
+      // const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
+      // while (pc.remoteDescription === null) {
+      //   await timer(1);
+      // }
 
       socketRef.emit("senderCandidate", {
         candidate: e.candidate,
@@ -305,6 +309,9 @@ const App = () => {
       console.log("SenderPeerConnection IceConnectionStateChange", pc.iceConnectionState);
     };
     
+    pc.onicecandidateerror = (e) => {
+      console.log(e)
+    }
 
     // save send peer connection to ref
     sendPCRef.current = pc;
@@ -386,16 +393,18 @@ const App = () => {
 
         try {
           if (!sendPCRef.current) return;
-          
-          const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
-          if (sendPCRef.current.iceGatheringState!=="complete") {
-            await timer(1);
-          }
 
-          await sendPCRef.current.setRemoteDescription(
+          // const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
+          // if (sendPCRef.current.iceGatheringState!=="complete") {
+          //   await timer(1);
+          // }
+
+          // let newsdp = await new RTCSessionDescription(data.sdp)
+
+          sendPCRef.current.setRemoteDescription(
             new RTCSessionDescription(data.sdp)
           );
-          console.log("getSenderAnswer setRemoteDesciption", sendPCRef.current.remoteDescription, sendPCRef.current.localDescription);
+          console.log("getSenderAnswer setRemoteDesciption", data.sdp);
         } catch (error) {
           console.log(error);
         }
@@ -411,14 +420,14 @@ const App = () => {
         try {
           if (!(data.candidate && sendPCRef.current)) return;
           console.log("get sender candidate");
-          const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
-          while(sendPCRef.current.remoteDescription === null) {
-            await timer(1);
-          }
-          await sendPCRef.current.addIceCandidate(
+          // const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
+          // while(sendPCRef.current.remoteDescription === null) {
+          //   await timer(1);
+          // }
+          sendPCRef.current.addIceCandidate(
             new RTCIceCandidate(data.candidate)
           );
-          console.log("candidate add success");
+          console.log("candidate add success", data.candidate);
         } catch (error) {
           console.log(error);
         }
@@ -435,7 +444,8 @@ const App = () => {
           console.log(`get socketID(${data.id})'s answer`);
           const pc: RTCPeerConnection = receivePCsRef.current[data.id];
           if (!pc) return;
-          await pc.setRemoteDescription(data.sdp);
+          // let newsdp = await new RTCSessionDescription(data.sdp)
+          pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           console.log(`socketID(${data.id})'s set remote sdp success`, pc.remoteDescription, pc.localDescription);
         } catch (error) {
           console.log(error);
@@ -454,12 +464,12 @@ const App = () => {
           console.log(`get socketID(${data.id})'s candidate`);
           const pc: RTCPeerConnection = receivePCsRef.current[data.id];
           if (!(pc && data.candidate)) return;
-          const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
-          while(receivePCsRef.current[data.id].remoteDescription === null) {
-            await timer(1)
-          }
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-          console.log(`socketID(${data.id})'s candidate add success`);
+          // const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
+          // while(receivePCsRef.current[data.id].remoteDescription === null) {
+          //   await timer(1)
+          // }
+          pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          console.log(`socketID(${data.id})'s candidate add success`, data.candidate);
         } catch (error) {
           console.log(error);
         }
